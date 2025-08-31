@@ -2,15 +2,25 @@ import SwiftUI
 import WebKit
 
 // MARK: - Data Models
-struct StreamingPlatform: Identifiable, Codable {
+struct StreamingPlatform: Identifiable, Codable, Hashable {
     let id = UUID()
     var name: String
     var url: String
     var icon: String
     var isCustom: Bool = false
+    
+    // Implement Hashable conformance
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    // Implement Equatable conformance (required by Hashable)
+    static func == (lhs: StreamingPlatform, rhs: StreamingPlatform) -> Bool {
+        return lhs.id == rhs.id
+    }
 }
 
-// MARK: - WebView
+// MARK: - WebView with Navigation Support
 struct WebView: NSViewRepresentable {
     let url: URL
     @Binding var canGoBack: Bool
@@ -24,14 +34,20 @@ struct WebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
-        configuration.preferences.javaScriptEnabled = true
-        configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
-        configuration.allowsInlineMediaPlayback = true
+        
+        // Configure preferences
+        let preferences = configuration.preferences
+        preferences.javaScriptEnabled = true
+        preferences.javaScriptCanOpenWindowsAutomatically = true
+        
+        // Configure media playback
         configuration.mediaTypesRequiringUserActionForPlayback = []
         
-        // Enable DRM content
-        configuration.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
-        configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        // Enable additional features for better compatibility
+        if #available(macOS 10.15, *) {
+            preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+            preferences.setValue(true, forKey: "developerExtrasEnabled")
+        }
         
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -39,36 +55,105 @@ struct WebView: NSViewRepresentable {
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsMagnification = true
         
+        // Set up notification observers
+        context.coordinator.setupNotificationObservers(for: webView)
+        
         return webView
     }
     
     func updateNSView(_ webView: WKWebView, context: Context) {
         if webView.url != url {
-            webView.load(URLRequest(url: url))
+            let request = URLRequest(url: url)
+            webView.load(request)
         }
     }
     
     class Coordinator: NSObject, WKNavigationDelegate {
         var parent: WebView
+        private var webView: WKWebView?
+        private var observers: [NSObjectProtocol] = []
         
         init(_ parent: WebView) {
             self.parent = parent
+            super.init()
+        }
+        
+        deinit {
+            // Clean up observers
+            observers.forEach { NotificationCenter.default.removeObserver($0) }
+        }
+        
+        func setupNotificationObservers(for webView: WKWebView) {
+            self.webView = webView
+            
+            // Clean up existing observers
+            observers.forEach { NotificationCenter.default.removeObserver($0) }
+            observers.removeAll()
+            
+            // Go Back
+            let backObserver = NotificationCenter.default.addObserver(
+                forName: .goBack,
+                object: nil,
+                queue: .main
+            ) { _ in
+                webView.goBack()
+            }
+            observers.append(backObserver)
+            
+            // Go Forward
+            let forwardObserver = NotificationCenter.default.addObserver(
+                forName: .goForward,
+                object: nil,
+                queue: .main
+            ) { _ in
+                webView.goForward()
+            }
+            observers.append(forwardObserver)
+            
+            // Refresh
+            let refreshObserver = NotificationCenter.default.addObserver(
+                forName: .refresh,
+                object: nil,
+                queue: .main
+            ) { _ in
+                webView.reload()
+            }
+            observers.append(refreshObserver)
         }
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            parent.isLoading = true
-            parent.canGoBack = webView.canGoBack
-            parent.canGoForward = webView.canGoForward
+            DispatchQueue.main.async {
+                self.parent.isLoading = true
+                self.parent.canGoBack = webView.canGoBack
+                self.parent.canGoForward = webView.canGoForward
+            }
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            parent.isLoading = false
-            parent.canGoBack = webView.canGoBack
-            parent.canGoForward = webView.canGoForward
+            DispatchQueue.main.async {
+                self.parent.isLoading = false
+                self.parent.canGoBack = webView.canGoBack
+                self.parent.canGoForward = webView.canGoForward
+            }
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            parent.isLoading = false
+            DispatchQueue.main.async {
+                self.parent.isLoading = false
+                print("WebView navigation failed: \(error.localizedDescription)")
+            }
+        }
+        
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            DispatchQueue.main.async {
+                self.parent.isLoading = false
+                print("WebView provisional navigation failed: \(error.localizedDescription)")
+            }
+        }
+        
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            // Allow all navigation
+            decisionHandler(.allow)
         }
     }
 }
@@ -127,6 +212,144 @@ class PlatformManager: ObservableObject {
     }
 }
 
+// MARK: - Sidebar View (Extracted to reduce complexity)
+struct SidebarView: View {
+    @ObservedObject var platformManager: PlatformManager
+    @Binding var selectedPlatform: StreamingPlatform?
+    @Binding var showingAddPlatform: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Platform List
+            List(selection: $selectedPlatform) {
+                Section("Streaming Platforms") {
+                    ForEach(platformManager.platforms) { platform in
+                        PlatformRow(platform: platform, platformManager: platformManager)
+                            .tag(platform)
+                    }
+                }
+            }
+            .listStyle(SidebarListStyle())
+            
+            // Add Platform Button
+            Divider()
+            
+            AddPlatformButton(showingAddPlatform: $showingAddPlatform)
+        }
+        .frame(minWidth: 200, idealWidth: 250)
+    }
+}
+
+// MARK: - Platform Row (Extracted to reduce complexity)
+struct PlatformRow: View {
+    let platform: StreamingPlatform
+    @ObservedObject var platformManager: PlatformManager
+    
+    var body: some View {
+        HStack {
+            Image(systemName: platform.icon)
+                .foregroundColor(.accentColor)
+                .frame(width: 20)
+            
+            Text(platform.name)
+                .lineLimit(1)
+            
+            Spacer()
+            
+            if platform.isCustom {
+                Button(action: {
+                    platformManager.removePlatform(platform)
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                        .imageScale(.small)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Add Platform Button (Extracted to reduce complexity)
+struct AddPlatformButton: View {
+    @Binding var showingAddPlatform: Bool
+    
+    var body: some View {
+        Button(action: { showingAddPlatform = true }) {
+            Label("Add Platform", systemImage: "plus.circle.fill")
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .background(Color.gray.opacity(0.1))
+    }
+}
+
+// MARK: - Navigation Bar (Extracted to reduce complexity)
+struct NavigationBar: View {
+    let platform: StreamingPlatform
+    let canGoBack: Bool
+    let canGoForward: Bool
+    let isLoading: Bool
+    let onGoBack: () -> Void
+    let onGoForward: () -> Void
+    let onRefresh: () -> Void
+    let onFullScreen: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            Button(action: onGoBack) {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(!canGoBack)
+            
+            Button(action: onGoForward) {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(!canGoForward)
+            
+            Button(action: onRefresh) {
+                Image(systemName: "arrow.clockwise")
+            }
+            
+            Text(platform.name)
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+            
+            if isLoading {
+                ProgressView()
+                    .scaleEffect(0.7)
+            }
+            
+            Button(action: onFullScreen) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+}
+
+// MARK: - Welcome View (Extracted to reduce complexity)
+struct WelcomeView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "play.tv")
+                .font(.system(size: 64))
+                .foregroundColor(.secondary)
+            
+            Text("StreamHub")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            
+            Text("Select a streaming platform from the sidebar")
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
 // MARK: - Main Content View
 struct ContentView: View {
     @StateObject private var platformManager = PlatformManager()
@@ -135,142 +358,95 @@ struct ContentView: View {
     @State private var canGoBack = false
     @State private var canGoForward = false
     @State private var isLoading = false
-    @State private var currentURL: URL?
     @State private var showingSidebar = true
     
     var body: some View {
         NavigationSplitView {
-            // Sidebar
-            VStack(spacing: 0) {
-                // Platform List
-                List(selection: $selectedPlatform) {
-                    Section("Streaming Platforms") {
-                        ForEach(platformManager.platforms) { platform in
-                            HStack {
-                                Image(systemName: platform.icon)
-                                    .foregroundColor(.accentColor)
-                                    .frame(width: 20)
-                                Text(platform.name)
-                                    .lineLimit(1)
-                                Spacer()
-                                if platform.isCustom {
-                                    Button(action: {
-                                        platformManager.removePlatform(platform)
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.secondary)
-                                            .imageScale(.small)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                            .tag(platform)
-                            .padding(.vertical, 4)
-                        }
-                    }
-                }
-                .listStyle(SidebarListStyle())
-                
-                // Add Platform Button
-                Divider()
-                Button(action: { showingAddPlatform = true }) {
-                    Label("Add Platform", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .background(Color.gray.opacity(0.1))
-            }
-            .frame(minWidth: 200, idealWidth: 250)
+            SidebarView(
+                platformManager: platformManager,
+                selectedPlatform: $selectedPlatform,
+                showingAddPlatform: $showingAddPlatform
+            )
             .toolbar {
                 ToolbarItem(placement: .navigation) {
-                    Button(action: {
-                        withAnimation {
-                            showingSidebar.toggle()
-                        }
-                    }) {
+                    Button(action: toggleSidebar) {
                         Image(systemName: "sidebar.left")
                     }
                 }
             }
         } detail: {
-            // Main Content
-            if let platform = selectedPlatform,
-               let url = URL(string: platform.url) {
-                VStack(spacing: 0) {
-                    // Navigation Bar
-                    HStack(spacing: 16) {
-                        Button(action: goBack) {
-                            Image(systemName: "chevron.left")
-                        }
-                        .disabled(!canGoBack)
-                        
-                        Button(action: goForward) {
-                            Image(systemName: "chevron.right")
-                        }
-                        .disabled(!canGoForward)
-                        
-                        Button(action: refresh) {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                        
-                        Text(platform.name)
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                        
-                        if isLoading {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                        }
-                        
-                        Button(action: enterFullScreen) {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    
-                    Divider()
-                    
-                    // WebView
-                    WebView(url: url,
-                           canGoBack: $canGoBack,
-                           canGoForward: $canGoForward,
-                           isLoading: $isLoading)
-                }
-            } else {
-                VStack(spacing: 20) {
-                    Image(systemName: "play.tv")
-                        .font(.system(size: 64))
-                        .foregroundColor(.secondary)
-                    Text("StreamHub")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    Text("Select a streaming platform from the sidebar")
-                        .foregroundColor(.secondary)
-                }
-            }
+            DetailView(
+                selectedPlatform: selectedPlatform,
+                canGoBack: $canGoBack,
+                canGoForward: $canGoForward,
+                isLoading: $isLoading
+            )
         }
         .frame(minWidth: 800, minHeight: 600)
         .sheet(isPresented: $showingAddPlatform) {
             AddPlatformView(platformManager: platformManager)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showAddPlatform)) { _ in
+            showingAddPlatform = true
+        }
     }
     
-    func goBack() {
+    private func toggleSidebar() {
+        withAnimation {
+            showingSidebar.toggle()
+        }
+    }
+}
+
+// MARK: - Detail View (Extracted to reduce complexity)
+struct DetailView: View {
+    let selectedPlatform: StreamingPlatform?
+    @Binding var canGoBack: Bool
+    @Binding var canGoForward: Bool
+    @Binding var isLoading: Bool
+    
+    var body: some View {
+        if let platform = selectedPlatform,
+           let url = URL(string: platform.url) {
+            VStack(spacing: 0) {
+                NavigationBar(
+                    platform: platform,
+                    canGoBack: canGoBack,
+                    canGoForward: canGoForward,
+                    isLoading: isLoading,
+                    onGoBack: goBack,
+                    onGoForward: goForward,
+                    onRefresh: refresh,
+                    onFullScreen: enterFullScreen
+                )
+                
+                Divider()
+                
+                WebView(
+                    url: url,
+                    canGoBack: $canGoBack,
+                    canGoForward: $canGoForward,
+                    isLoading: $isLoading
+                )
+            }
+        } else {
+            WelcomeView()
+        }
+    }
+    
+    private func goBack() {
         NotificationCenter.default.post(name: .goBack, object: nil)
     }
     
-    func goForward() {
+    private func goForward() {
         NotificationCenter.default.post(name: .goForward, object: nil)
     }
     
-    func refresh() {
+    private func refresh() {
         NotificationCenter.default.post(name: .refresh, object: nil)
     }
     
-    func enterFullScreen() {
+    private func enterFullScreen() {
         if let window = NSApplication.shared.keyWindow {
             window.toggleFullScreen(nil)
         }
@@ -306,24 +482,41 @@ struct AddPlatformView: View {
                     .textFieldStyle(RoundedBorderTextFieldStyle())
             }
             
-            HStack(spacing: 12) {
-                Button("Cancel") {
+            ButtonRow(
+                name: name,
+                url: url,
+                onCancel: { dismiss() },
+                onAdd: {
+                    platformManager.addCustomPlatform(name: name, url: url)
                     dismiss()
                 }
-                .keyboardShortcut(.escape)
-                
-                Button("Add Platform") {
-                    if !name.isEmpty && !url.isEmpty {
-                        platformManager.addCustomPlatform(name: name, url: url)
-                        dismiss()
-                    }
-                }
-                .keyboardShortcut(.return)
-                .disabled(name.isEmpty || url.isEmpty)
-            }
+            )
         }
         .padding(30)
         .frame(width: 400)
+    }
+}
+
+// MARK: - Button Row (Extracted to reduce complexity)
+struct ButtonRow: View {
+    let name: String
+    let url: String
+    let onCancel: () -> Void
+    let onAdd: () -> Void
+    
+    private var isFormValid: Bool {
+        !name.isEmpty && !url.isEmpty
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Button("Cancel", action: onCancel)
+                .keyboardShortcut(.escape)
+            
+            Button("Add Platform", action: onAdd)
+                .keyboardShortcut(.return)
+                .disabled(!isFormValid)
+        }
     }
 }
 
@@ -332,4 +525,5 @@ extension Notification.Name {
     static let goBack = Notification.Name("goBack")
     static let goForward = Notification.Name("goForward")
     static let refresh = Notification.Name("refresh")
+    static let showAddPlatform = Notification.Name("showAddPlatform")
 }
