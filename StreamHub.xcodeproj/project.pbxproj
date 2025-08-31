@@ -29,9 +29,22 @@
 		965AADED2E64C517000290FF /* StreamHubUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StreamHubUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		965AAE012E64C8E5000290FF /* Exceptions for "StreamHub" folder in "StreamHub" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 965AADD42E64C516000290FF /* StreamHub */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		965AADD72E64C516000290FF /* StreamHub */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				965AAE012E64C8E5000290FF /* Exceptions for "StreamHub" folder in "StreamHub" target */,
+			);
 			path = StreamHub;
 			sourceTree = "<group>";
 		};
@@ -402,7 +415,10 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StreamHub/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs camera access for video calls on streaming platforms";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs microphone access for video calls on streaming platforms";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -429,7 +445,10 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StreamHub/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs camera access for video calls on streaming platforms";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs microphone access for video calls on streaming platforms";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
