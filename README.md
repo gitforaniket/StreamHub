@@ -162,19 +162,13 @@ We welcome contributions! Please follow these steps:
 ### Code of Conduct
 Please be respectful and constructive in all interactions. We're building this together!
 
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get started.
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-### License Summary
-- ✅ **Commercial use** allowed
-- ✅ **Modification** allowed
-- ✅ **Distribution** allowed  
-- ✅ **Private use** allowed
-- ❌ **Warranty** not provided
-- ❌ **Liability** not accepted
-
-**Copyright (c) 2025 Aniket** - Original author retains copyright ownership while allowing community contributions under MIT license terms.
 
 ## 👨‍💻 Author
 
