@@ -15,5 +15,7 @@
     <string>This app needs camera access for video calls on streaming platforms</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app needs microphone access for video calls on streaming platforms</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.3</string>
 </dict>
 </plist>

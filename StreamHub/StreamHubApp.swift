@@ -16,7 +16,7 @@ struct StreamHubApp: App {
         config.timeoutIntervalForResource = 60.0
         config.waitsForConnectivity = true
         
-        print("StreamHub app initialized with network configuration")
+        print("StreamHub app initialized with network configuration and fullscreen video support")
     }
     
     var body: some Scene {
@@ -25,7 +25,7 @@ struct StreamHubApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear {
                     // Additional setup when view appears
-                    print("ContentView appeared")
+                    print("ContentView appeared - Fullscreen video support enabled")
                 }
         }
         .windowStyle(.titleBar)
@@ -54,6 +54,15 @@ struct StreamHubApp: App {
                     NotificationCenter.default.post(name: .refresh, object: nil)
                 }
                 .keyboardShortcut("r", modifiers: .command)
+            }
+            
+            CommandMenu("View") {
+                Button("Toggle Fullscreen") {
+                    if let window = NSApplication.shared.keyWindow {
+                        window.toggleFullScreen(nil)
+                    }
+                }
+                .keyboardShortcut("f", modifiers: [.command, .control])
             }
         }
     }

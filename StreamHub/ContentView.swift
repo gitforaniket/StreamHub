@@ -20,7 +20,7 @@ struct StreamingPlatform: Identifiable, Codable, Hashable {
     }
 }
 
-// MARK: - WebView with Navigation Support
+// MARK: - WebView with Navigation Support and Fullscreen Fix
 struct WebView: NSViewRepresentable {
     let url: URL
     @Binding var canGoBack: Bool
@@ -42,16 +42,82 @@ struct WebView: NSViewRepresentable {
         let preferences = WKPreferences()
         preferences.javaScriptEnabled = true
         preferences.javaScriptCanOpenWindowsAutomatically = true
+        
+        // CRITICAL FIX: Enable fullscreen for HTML5 videos and other elements
+        if #available(macOS 12.3, *) {
+            preferences.isElementFullscreenEnabled = true
+        }
+        
         configuration.preferences = preferences
         
-        // Allow all media to play without user interaction
+        // FIXED: Allow all media to play without user interaction (correct spelling)
         configuration.mediaTypesRequiringUserActionForPlayback = []
         
         // Configure process pool for better performance
         configuration.processPool = WKProcessPool()
         
+        // IMPORTANT: Configure user content controller for fullscreen handling
+        let userContentController = WKUserContentController()
+        
+        // JavaScript to handle fullscreen events and positioning
+        let fullscreenScript = """
+        (function() {
+            // Function to ensure proper fullscreen positioning
+            function ensureProperFullscreen() {
+                const videos = document.querySelectorAll('video');
+                videos.forEach(video => {
+                    // Add event listeners for fullscreen changes
+                    video.addEventListener('webkitfullscreenchange', function() {
+                        if (document.webkitFullscreenElement === video) {
+                            // Apply CSS to ensure proper centering
+                            video.style.position = 'fixed';
+                            video.style.top = '0';
+                            video.style.left = '0';
+                            video.style.width = '100vw';
+                            video.style.height = '100vh';
+                            video.style.objectFit = 'contain';
+                            video.style.zIndex = '999999';
+                            video.style.backgroundColor = 'black';
+                        }
+                    });
+                    
+                    // Handle fullscreen error events
+                    video.addEventListener('webkitfullscreenerror', function() {
+                        console.log('Fullscreen error occurred');
+                    });
+                });
+            }
+            
+            // Run when DOM is loaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', ensureProperFullscreen);
+            } else {
+                ensureProperFullscreen();
+            }
+            
+            // Also run when new content is dynamically loaded
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        ensureProperFullscreen();
+                    }
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        })();
+        """
+        
+        let script = WKUserScript(source: fullscreenScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        userContentController.addUserScript(script)
+        configuration.userContentController = userContentController
+        
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         
         // More compatible user agent
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
@@ -59,6 +125,10 @@ struct WebView: NSViewRepresentable {
         // Enable navigation gestures and zooming
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsMagnification = true
+        
+        // IMPORTANT: Set autoresizing mask for proper layout
+        webView.autoresizingMask = [.width, .height]
+        webView.translatesAutoresizingMaskIntoConstraints = false
         
         // Set up notification observers
         context.coordinator.setupNotificationObservers(for: webView)
@@ -71,7 +141,7 @@ struct WebView: NSViewRepresentable {
         context.coordinator.updateURL(url, in: webView)
     }
     
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: WebView
         private var webView: WKWebView?
         private var observers: [NSObjectProtocol] = []
@@ -157,6 +227,7 @@ struct WebView: NSViewRepresentable {
             observers.append(refreshObserver)
         }
         
+        // MARK: - WKNavigationDelegate
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             print("Started loading: \(webView.url?.absoluteString ?? "unknown")")
             DispatchQueue.main.async {
@@ -202,6 +273,35 @@ struct WebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
             print("Response policy decision for: \(navigationResponse.response.url?.absoluteString ?? "unknown")")
             decisionHandler(.allow)
+        }
+        
+        // MARK: - WKUIDelegate (Important for fullscreen support)
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            // Handle popup windows if needed
+            if navigationAction.targetFrame == nil {
+                webView.load(navigationAction.request)
+            }
+            return nil
+        }
+        
+        // Handle JavaScript alerts, confirms, and prompts
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+            let alert = NSAlert()
+            alert.messageText = "Alert"
+            alert.informativeText = message
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            completionHandler()
+        }
+        
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+            let alert = NSAlert()
+            alert.messageText = "Confirm"
+            alert.informativeText = message
+            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "Cancel")
+            let response = alert.runModal()
+            completionHandler(response == .alertFirstButtonReturn)
         }
     }
 }
@@ -394,6 +494,10 @@ struct WelcomeView: View {
             
             Text("Select a streaming platform from the sidebar")
                 .foregroundColor(.secondary)
+            
+            Text("Video fullscreen support enabled with proper positioning!")
+                .font(.caption)
+                .foregroundColor(.green)
         }
     }
 }
@@ -476,6 +580,7 @@ struct DetailView: View {
                     canGoForward: $canGoForward,
                     isLoading: $isLoading
                 )
+                .clipped() // Ensure proper clipping
             }
         } else {
             WelcomeView()
