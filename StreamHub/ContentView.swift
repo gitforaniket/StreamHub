@@ -33,25 +33,30 @@ struct WebView: NSViewRepresentable {
     
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
         
-        // Configure preferences
-        let preferences = configuration.preferences
+        // Use default data store with persistent storage
+        let dataStore = WKWebsiteDataStore.default()
+        configuration.websiteDataStore = dataStore
+        
+        // Configure preferences for better compatibility
+        let preferences = WKPreferences()
         preferences.javaScriptEnabled = true
         preferences.javaScriptCanOpenWindowsAutomatically = true
+        configuration.preferences = preferences
         
-        // Configure media playback
+        // Allow all media to play without user interaction
         configuration.mediaTypesRequiringUserActionForPlayback = []
         
-        // Enable additional features for better compatibility
-        if #available(macOS 10.15, *) {
-            preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
-            preferences.setValue(true, forKey: "developerExtrasEnabled")
-        }
+        // Configure process pool for better performance
+        configuration.processPool = WKProcessPool()
         
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        
+        // More compatible user agent
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        
+        // Enable navigation gestures and zooming
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsMagnification = true
         
@@ -62,16 +67,17 @@ struct WebView: NSViewRepresentable {
     }
     
     func updateNSView(_ webView: WKWebView, context: Context) {
-        if webView.url != url {
-            let request = URLRequest(url: url)
-            webView.load(request)
-        }
+        // Let the coordinator handle URL loading to prevent rapid reloads
+        context.coordinator.updateURL(url, in: webView)
     }
     
     class Coordinator: NSObject, WKNavigationDelegate {
         var parent: WebView
         private var webView: WKWebView?
         private var observers: [NSObjectProtocol] = []
+        private var lastLoadedURL: URL?
+        private var isCurrentlyLoading = false
+        private var loadTask: DispatchWorkItem?
         
         init(_ parent: WebView) {
             self.parent = parent
@@ -79,8 +85,34 @@ struct WebView: NSViewRepresentable {
         }
         
         deinit {
-            // Clean up observers
+            // Clean up observers and cancel pending tasks
             observers.forEach { NotificationCenter.default.removeObserver($0) }
+            loadTask?.cancel()
+        }
+        
+        func updateURL(_ url: URL, in webView: WKWebView) {
+            // Cancel any pending load task
+            loadTask?.cancel()
+            
+            // Only load if URL is actually different and we're not already loading
+            guard lastLoadedURL?.absoluteString != url.absoluteString else {
+                return
+            }
+            
+            // Create a new load task with delay to prevent rapid calls
+            loadTask = DispatchWorkItem { [weak self] in
+                guard let self = self, !self.isCurrentlyLoading else { return }
+                
+                print("Loading URL: \(url.absoluteString)")
+                self.lastLoadedURL = url
+                self.isCurrentlyLoading = true
+                
+                let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 30)
+                webView.load(request)
+            }
+            
+            // Execute the load task after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: loadTask!)
         }
         
         func setupNotificationObservers(for webView: WKWebView) {
@@ -96,7 +128,9 @@ struct WebView: NSViewRepresentable {
                 object: nil,
                 queue: .main
             ) { _ in
-                webView.goBack()
+                if webView.canGoBack {
+                    webView.goBack()
+                }
             }
             observers.append(backObserver)
             
@@ -106,7 +140,9 @@ struct WebView: NSViewRepresentable {
                 object: nil,
                 queue: .main
             ) { _ in
-                webView.goForward()
+                if webView.canGoForward {
+                    webView.goForward()
+                }
             }
             observers.append(forwardObserver)
             
@@ -122,6 +158,7 @@ struct WebView: NSViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            print("Started loading: \(webView.url?.absoluteString ?? "unknown")")
             DispatchQueue.main.async {
                 self.parent.isLoading = true
                 self.parent.canGoBack = webView.canGoBack
@@ -130,29 +167,40 @@ struct WebView: NSViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            print("Finished loading: \(webView.url?.absoluteString ?? "unknown")")
             DispatchQueue.main.async {
                 self.parent.isLoading = false
                 self.parent.canGoBack = webView.canGoBack
                 self.parent.canGoForward = webView.canGoForward
+                self.isCurrentlyLoading = false
             }
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            print("Navigation failed: \(error.localizedDescription)")
             DispatchQueue.main.async {
                 self.parent.isLoading = false
-                print("WebView navigation failed: \(error.localizedDescription)")
+                self.isCurrentlyLoading = false
             }
         }
         
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            let nsError = error as NSError
+            print("Provisional navigation failed: \(error.localizedDescription) (Code: \(nsError.code))")
+            
             DispatchQueue.main.async {
                 self.parent.isLoading = false
-                print("WebView provisional navigation failed: \(error.localizedDescription)")
+                self.isCurrentlyLoading = false
             }
         }
         
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            // Allow all navigation
+            print("Navigation policy decision for: \(navigationAction.request.url?.absoluteString ?? "unknown")")
+            decisionHandler(.allow)
+        }
+        
+        func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+            print("Response policy decision for: \(navigationResponse.response.url?.absoluteString ?? "unknown")")
             decisionHandler(.allow)
         }
     }
@@ -525,5 +573,4 @@ extension Notification.Name {
     static let goBack = Notification.Name("goBack")
     static let goForward = Notification.Name("goForward")
     static let refresh = Notification.Name("refresh")
-    static let showAddPlatform = Notification.Name("showAddPlatform")
 }

@@ -4,20 +4,29 @@ import WebKit
 @main
 struct StreamHubApp: App {
     init() {
-        // Enable persistent cookies and login sessions
+        // Configure HTTP cookie storage
         HTTPCookieStorage.shared.cookieAcceptPolicy = .always
         
-        // Configure WebKit settings
+        // Configure WebKit data store for persistent sessions
         let dataStore = WKWebsiteDataStore.default()
-        dataStore.httpCookieStore.getAllCookies { cookies in
-            // Cookies are persisted automatically
-        }
+        
+        // Configure URL session for better network handling
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30.0
+        config.timeoutIntervalForResource = 60.0
+        config.waitsForConnectivity = true
+        
+        print("StreamHub app initialized with network configuration")
     }
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(.dark)
+                .onAppear {
+                    // Additional setup when view appears
+                    print("ContentView appeared")
+                }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
