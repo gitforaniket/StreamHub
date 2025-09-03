@@ -2,6 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Network Security Configuration -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
@@ -10,12 +11,138 @@
         <true/>
         <key>NSAllowsLocalNetworking</key>
         <true/>
+        <!-- Enhanced streaming platform support -->
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>netflix.com</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSTemporaryExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+            <key>primevideo.com</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSTemporaryExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+            <key>hotstar.com</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSTemporaryExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+            <key>jiocinema.com</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSTemporaryExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+            <key>zee5.com</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSTemporaryExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+            <key>sonyliv.com</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSTemporaryExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+            <key>airtelxstream.in</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSTemporaryExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+            </dict>
+        </dict>
     </dict>
+    
+    <!-- Privacy Permissions -->
     <key>NSCameraUsageDescription</key>
     <string>This app needs camera access for video calls on streaming platforms</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app needs microphone access for video calls on streaming platforms</string>
+    
+    <!-- System Requirements -->
     <key>LSMinimumSystemVersion</key>
     <string>12.3</string>
+    
+    <!-- Enhanced Display Support -->
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSRequiresAquaSystemAppearance</key>
+    <false/>
+    
+    <!-- Application Category -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.entertainment</string>
+    
+    <!-- Document Types (for potential future file support) -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Streaming URL</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.url</string>
+            </array>
+        </dict>
+    </array>
+    
+    <!-- URL Schemes for deep linking -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.aniket.streamhub</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>streamhub</string>
+            </array>
+        </dict>
+    </array>
+    
+    <!-- Background Modes for better streaming -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+        <string>background-processing</string>
+    </array>
+    
+    <!-- Prevent App Nap for uninterrupted streaming -->
+    <key>NSAppSleepDisabled</key>
+    <true/>
+    
+    <!-- Hardware Acceleration -->
+    <key>MetalPerformanceShaderGraphCompilerEnabled</key>
+    <true/>
 </dict>
 </plist>

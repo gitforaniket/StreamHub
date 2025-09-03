@@ -2,15 +2,48 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Enable App Sandbox -->
     <key>com.apple.security.app-sandbox</key>
     <true/>
+    
+    <!-- Media Device Access -->
     <key>com.apple.security.device.audio-input</key>
     <true/>
     <key>com.apple.security.device.camera</key>
     <true/>
+    
+    <!-- Network Access -->
     <key>com.apple.security.network.client</key>
     <true/>
     <key>com.apple.security.network.server</key>
+    <true/>
+    
+    <!-- Enhanced WebKit and Media Capabilities -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    
+    <!-- Hardware Acceleration -->
+    <key>com.apple.security.device.audio-video-bridging</key>
+    <true/>
+    
+    <!-- User Data Access (for preferences and session storage) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Allow outgoing network connections -->
+    <key>com.apple.security.network.outgoing</key>
+    <true/>
+    
+    <!-- Print capability (for potential future features) -->
+    <key>com.apple.security.print</key>
+    <true/>
+    
+    <!-- Prevent App Nap during video playback -->
+    <key>com.apple.security.automation.apple-events</key>
     <true/>
 </dict>
 </plist>
